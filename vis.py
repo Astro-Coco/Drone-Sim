@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 class Imu():
@@ -68,7 +70,7 @@ class simulation:
         #ADJUST POSITIONS
         self.motor1 = motor(0.10,0.10,1.0)
         self.motor2 = motor(0.10,-0.10,1.0)
-        self.motor3 = motor(-0.10,-0.10,1)
+        self.motor3 = motor(-0.10,-0.10,1.0)
         self.motor4 = motor(-0.10,0.10,1)
 
         self.motors = [self.motor1, self.motor2, self.motor3, self.motor4]
@@ -356,5 +358,33 @@ def quaternion_to_euler(q):
     
     return roll, pitch
 
-if __name__ == '__main__':
-    simulation(0.004, 5, 'some_mode')
+
+sim = simulation(0.004, 5, 'some_mode')
+
+
+
+
+trajectory = np.array(sim.data['pos'])
+
+x = trajectory[:, 0]
+y = trajectory[:, 1]
+z = trajectory[:, 2]
+
+# Create a new figure
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+
+# Plot the trajectory with scatter points and control the size with 's'
+scatter_size = 10  # Adjust this value to make points smaller or larger
+ax.scatter(x, y, z, label='Trajectory', s=scatter_size, c='b', marker='o')
+
+# Add labels for the axes
+ax.set_xlabel('X Label')
+ax.set_ylabel('Y Label')
+ax.set_zlabel('Z Label')
+
+# Add a legend
+ax.legend()
+
+# Show the interactive plot
+plt.show()
