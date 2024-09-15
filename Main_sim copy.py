@@ -1,63 +1,25 @@
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
-from vpython import *
-from time import *
-import math
-
- 
-scene.range=5
-scene.background=color.yellow
-toRad=2*np.pi/360
-toDeg=1/toRad
-scene.forward=vector(-1,-1,-1)
- 
-scene.width=1200
-scene.height=1080
- 
-xarrow=arrow(lenght=2, shaftwidth=.1, color=color.red,axis=vector(1,0,0))
-yarrow=arrow(lenght=2, shaftwidth=.1, color=color.green,axis=vector(0,1,0))
-zarrow=arrow(lenght=4, shaftwidth=.1, color=color.blue,axis=vector(0,0,1))
- 
-frontArrow=arrow(length=4,shaftwidth=.1,color=color.purple,axis=vector(1,0,0))
-upArrow=arrow(length=1,shaftwidth=.1,color=color.magenta,axis=vector(0,1,0))
-sideArrow=arrow(length=2,shaftwidth=.1,color=color.orange,axis=vector(0,0,1))
- 
-bBoard=box(length=6,width=2,height=.2,opacity=.8,pos=vector(0,0,0,))
-bn=box(length=1,width=.75,height=.1, pos=vector(-.5,.1+.05,0),color=color.blue)
-nano=box(lenght=1.75,width=.6,height=.1,pos=vector(-2,.1+.05,0),color=color.green)
-myObj=compound([bBoard,bn,nano])
-
+import pythreejs as p3
+from IPython.display import display
 
 
 class Imu():
     def __init__(self):
-        self.roll_offset = 2
-        self.pitch_offset = 3
+        self.roll_offset = 0
+        self.pitch_offset = 0
         self.roll = 0
         self.pitch = 0
         self.yaw = 0
         
 
-    def compute_noise(self, roll, pitch, yaw, time):
-
-        noise_fonc_cap = (np.sin(4 * time) + 0.3 * np.sin(40 * time))
-
-        imu_noise = False
-
-        if imu_noise:
-            roll_noise = np.random.random()*noise_fonc_cap
-            pitch_noise = np.random.random()*noise_fonc_cap
-            yaw_noise =np.random.random()*noise_fonc_cap
-        else:
-            roll_noise = 0
-            pitch_noise = 0
-            yaw_noise = 0
+    def compute_noise(self, roll, pitch, yaw):
+        roll_noise = 0
+        pitch_noise = 0
+        yaw_noise = 0
 
         self.roll = roll + self.roll_offset + roll_noise
         self.pitch = pitch + self.pitch_offset + pitch_noise
         self.yaw = yaw + yaw_noise
-
 
         return roll, pitch, yaw
 
@@ -69,17 +31,20 @@ class motor:
         self.x = x
         self.y = y
 
+       
+
         self.pos_to_center= np.array([x,y,0])
         self.thrust_fraction = thrust_fraction
         self.max_thrust = g*motor_nominal_thrust*self.thrust_fraction #To newtons and scaled with thrust fraction
 
-        self.pwm = 1512
+        self.pwm = 1500
+        self.thrust = 0
 
 class simulation:
-    def __init__(self, dt, sim_time, mode):
+    def __init__(self, dt, time, mode):
         self.dt = dt
         self.time = 0
-        self.sim_time = sim_time
+        self.timer = time
         self.mode = mode
 
         self.imu = Imu()
@@ -88,7 +53,6 @@ class simulation:
 
         #real parameters
         self.drone_pos = np.array([0.,0.,0.])
-        self.drone_position = vector(0, 0, 0)  # Starting position for visualization
         self.drone_speed = np.array([0.,0.,0.])
         self.drone_acc = np.array([0.,0.,0.])
         Ixx = 3.14e-3
@@ -107,37 +71,58 @@ class simulation:
 
         #fraction of power motor has
         #ADJUST POSITIONS
-        self.motor1 = motor(0.10,0.10,1.0)
-        self.motor2 = motor(-0.10,0.10,1.0)
-        self.motor3 = motor(-0.10,-0.10,1.0)
-        self.motor4 = motor(0.10,-0.10,1.0)
+        self.motor1 = motor(0.10,0.10,1.1)
+        self.motor2 = motor(0.10,-0.10,1.1)
+        self.motor3 = motor(-0.10,-0.10,1)
+        self.motor4 = motor(-0.10,0.10,1)
 
         self.motors = [self.motor1, self.motor2, self.motor3, self.motor4]
 
 
         self.initialize()
+        # Create a simple 3D box or load an STL file
+        #geometry = p3.BoxGeometry(width=1, height=0.3, depth=0.2)  # Simple box example
+        geometry = p3.STLLoader().load('support.stl')  # STL file example
 
-        np.random.seed(42)
+        # Apply material and create mesh
+        material = p3.MeshStandardMaterial(color='blue')
+        self.mesh = p3.Mesh(geometry=geometry, material=material)
+
+        # Create scene and add the mesh
+        self.scene = p3.Scene(children=[self.mesh, p3.AmbientLight()])
+
+        # Set up the camera
+        self.camera = p3.PerspectiveCamera(position=[5, 5, 5], up=[0, 0, 1], aspect=2)
+        controller = p3.OrbitControls(controlling=self.camera)
+
+        # Render the scene
+        self.renderer = p3.Renderer(camera=self.camera, scene=self.scene, controls=[controller], width=600, height=400)
+
+        display(self.renderer)
 
         self.run_mainloop()
 
     def run_mainloop(self):
-        DesiredRoll = 15
-        DesiredPitch = 15
+        DesiredRoll = 0
+        DesiredPitch = 0
 
-        while (self.time < self.sim_time):
+        while (self.time < self.timer):
             RateRoll = self.angular_speed[0]
             RatePitch = self.angular_speed[1]
             RateYaw = self.angular_speed[2]
 
             self.drone_software.apply_PID_loops(DesiredRoll, DesiredPitch, self.imu.roll, self.imu.pitch, RateRoll, RatePitch, RateYaw)
-            self.motor1.pwm, self.motor2.pwm, self.motor3.pwm, self. motor4.pwm = self.drone_software.compute_motor_inputs(self.throttle)
+            self.drone_software.compute_motor_inputs(self.throttle)
         
             self.compute_motor_forces()
             self.compute_force_and_torque()
             self.compute_dynamics()
+
+            self.mesh.quaternion = (self.q[0], self.q[1], self.q[2], self.q[3])
+            self.renderer.render(self.scene, self.camera)
+
+
             self.record_data()
-            self.visualize(self.q, self.drone_speed*self.dt, self.drone_pos)
 
             self.time += self.dt
             self.i +=1
@@ -181,7 +166,7 @@ class simulation:
         pitch *= 180/np.pi
 
         yaw = 0
-        self.imu.compute_noise(roll, pitch, yaw, self.time)
+        self.imu.compute_noise(roll, pitch, yaw)
         
 
 
@@ -211,7 +196,7 @@ class simulation:
 
             self.data['roll'].append(self.imu.roll)
             self.data['pitch'].append(self.imu.pitch)
-            #print(f' Time : {self.time} , Normal : {self.normal}')
+            print(f' Time : {self.time} , Normal : {self.normal}')
 
 
     def initialize(self):
@@ -238,57 +223,24 @@ class simulation:
 
         self.throttle = 1500
 
-    def visualize(self,quaternion, speed_times_dt, pos):
-        try:
-            q0=float(quaternion[0])
-            q1=float(quaternion[1])
-            q2=float(quaternion[2])
-            q3=float(quaternion[3])
-    
-            roll=-math.atan2(2*(q0*q1+q2*q3),1-2*(q1*q1+q2*q2))
-            pitch=math.asin(2*(q0*q2-q3*q1))
-            yaw=-math.atan2(2*(q0*q3+q1*q2),1-2*(q2*q2+q3*q3))-np.pi/2
-    
-            rate(50)
-            k=vector(cos(yaw)*cos(pitch), sin(pitch),sin(yaw)*cos(pitch))
-            y=vector(0,1,0)
-            s=cross(k,y)
-            v=cross(s,k)
-            vrot=v*cos(roll)+cross(k,v)*sin(roll)
-    
-            frontArrow.axis=k
-            sideArrow.axis=cross(k,vrot)
-            upArrow.axis=vrot
-            myObj.axis=k
-            myObj.up=vrot
-            sideArrow.length=2
-            frontArrow.length=4
-            upArrow.length=1
-            #self.drone_position += vector(speed_times_dt[0], speed_times_dt[1], speed_times_dt[2])
-            #myObj.pos = vector(self.drone)  # Move the object to the new position
-        except:
-            pass
-
-
 
 
 class Drone_software():
     def __init__(self):
         #rate pid values
-        self.PRateRoll, self.PRatePitch, self.PRateYaw = 2.5, 2.5, 0.0
-        self.IRateRoll, self.IRatePitch, self.IRateYaw = 0.0, 0.0, 0.
-        self.DRateRoll, self.DRatePitch,self.DRateYaw = 0.10, 0.10, 0.0
+        self.PRateRoll, self.PRatePitch, self.PRateYaw = 1., 1., 0.
+        self.IRateRoll, self.IRatePitch, self.IRateYaw = 0., 0., 0.
+        self.DRateRoll, self.DRatePitch,self.DRateYaw = 0., 0., 0.
 
         #angle pid values
-        self.PRoll, self.PPitch = 2.5, 2.5
+        self.PRoll, self.PPitch = 2., 2.
         self.IRoll, self.IPitch = 0., 0.
-        self.DRoll, self.DPitch = 0.1, 0.1
+        self.DRoll, self.DPitch = 0., 0.
 
 
     def pid_equation(self,Error, P, I, D, PrevError, PrevIterm):
         MaxPIDvalues = 300
         time_passed = 0.004
-
 
         Pterm = P*Error
         Iterm = PrevIterm + I*(Error + PrevError)*time_passed/2
@@ -323,7 +275,7 @@ class Drone_software():
         DesiredRatePitch, self.PrevErrorPitch, self.PrevItermPitch = self.pid_equation(ErrorPitch, self.PPitch, self.IPitch, self.DPitch, self.PrevErrorPitch, self.PrevItermPitch)
 
         #ChangeRateYaw
-        DesiredRateYaw = 5
+        DesiredRateYaw = 0
 
         ErrorRateRoll = DesiredRateRoll - RateRoll
         ErrorRatePitch = DesiredRatePitch - RatePitch
@@ -381,6 +333,7 @@ class Drone_software():
 
 
 
+
 def quaternion_multiply(q1, q2):
     w1, x1, y1, z1 = q1
     w2, x2, y2, z2 = q2
@@ -423,52 +376,14 @@ def rotate_vector(v, q):
 
 def quaternion_to_euler(q):
     w, x, y, z = q
-
-    q0, q1, q2, q3 = w, x, y ,z
     
     # Roll (φ)
     roll = np.arctan2(2 * (w * x + y * z), 1 - 2 * (x**2 + y**2))
     
     # Pitch (θ)
     pitch = np.arcsin(2 * (w * y - z * x))
-
-
-    yaw=-math.atan2(2*(q0*q3+q1*q2),1-2*(q2*q2+q3*q3))-np.pi/2
     
     return roll, pitch
 
-
-sim = simulation(0.004, 2, 'some_mode')
-
-
-
-
-trajectory = np.array(sim.data['pos'])
-
-x = trajectory[:, 0]
-y = trajectory[:, 1]
-z = trajectory[:, 2]
-
-# Create a new figure
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-
-# Plot the trajectory with scatter points and control the size with 's'
-scatter_size = 8  # Adjust this value to make points smaller or larger
-ax.scatter(x, y, z, label='Trajectory', s=scatter_size, c='b', marker='o')
-
-# Add labels for the axes
-ax.set_xlabel('X Label')
-ax.set_ylabel('Y Label')
-ax.set_zlabel('Z Label')
-ax.set_xlim([0, 10])
-ax.set_ylim([0, 10])
-ax.set_zlim([0, 10])
-
-# Add a legend
-ax.legend()
-
-# Show the interactive plot
-plt.show()
-
-
+if __name__ == '__main__':
+    simulation(0.004, 5, 'some_mode')
