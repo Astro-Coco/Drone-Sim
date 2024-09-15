@@ -73,7 +73,7 @@ class Imu():
 
         noise_fonc_cap = 0.5*(np.sin(4 * time) + 0.3 * np.sin(40 * time))
 
-        imu_noise = True
+        imu_noise = False
 
         if imu_noise:
             roll_noise = np.random.random()*noise_fonc_cap
@@ -317,13 +317,13 @@ class simulation:
 class Drone_software():
     def __init__(self):
         #rate pid values
-        self.PRateRoll, self.PRatePitch, self.PRateYaw = 2.5, 2.5, 0.0
-        self.IRateRoll, self.IRatePitch, self.IRateYaw = 0.0, 0.0, 0.
-        self.DRateRoll, self.DRatePitch,self.DRateYaw = 0.10, 0.10, 0.0
+        self.PRateRoll, self.PRatePitch, self.PRateYaw = 4, 4, 0.0
+        self.IRateRoll, self.IRatePitch, self.IRateYaw = 2, 2, 0.
+        self.DRateRoll, self.DRatePitch,self.DRateYaw = 0.11, 0.11, 0.0
 
         #angle pid values
         self.PRoll, self.PPitch = 2.5, 2.5
-        self.IRoll, self.IPitch = 0.02, 0.02
+        self.IRoll, self.IPitch = 0.0, 0.0
         self.DRoll, self.DPitch = 0.1, 0.1
 
 
