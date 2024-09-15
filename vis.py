@@ -19,6 +19,8 @@ class Imu():
         self.roll = roll + self.roll_offset + roll_noise
         self.pitch = pitch + self.pitch_offset + pitch_noise
         self.yaw = yaw + yaw_noise
+        print('roulis : ')
+        print(self.roll)
 
         return roll, pitch, yaw
 
@@ -34,7 +36,7 @@ class motor:
         self.thrust_fraction = thrust_fraction
         self.max_thrust = g*motor_nominal_thrust*self.thrust_fraction #To newtons and scaled with thrust fraction
 
-        self.pwm = 1500
+        self.pwm = 1550
         self.thrust = 0
 
 class simulation:
@@ -68,10 +70,10 @@ class simulation:
 
         #fraction of power motor has
         #ADJUST POSITIONS
-        self.motor1 = motor(0.10,0.10,1.0)
+        self.motor1 = motor(0.10,0.10,1.05)
         self.motor2 = motor(0.10,-0.10,1.0)
         self.motor3 = motor(-0.10,-0.10,1.0)
-        self.motor4 = motor(-0.10,0.10,1)
+        self.motor4 = motor(-0.10,0.10,1.0)
 
         self.motors = [self.motor1, self.motor2, self.motor3, self.motor4]
 
@@ -90,7 +92,7 @@ class simulation:
             RateYaw = self.angular_speed[2]
 
             self.drone_software.apply_PID_loops(DesiredRoll, DesiredPitch, self.imu.roll, self.imu.pitch, RateRoll, RatePitch, RateYaw)
-            self.drone_software.compute_motor_inputs(self.throttle)
+            self.motor1.pwm, self.motor2.pwm, self.motor3.pwm, self. motor4.pwm = self.drone_software.compute_motor_inputs(self.throttle)
         
             self.compute_motor_forces()
             self.compute_force_and_torque()
@@ -359,7 +361,7 @@ def quaternion_to_euler(q):
     return roll, pitch
 
 
-sim = simulation(0.004, 5, 'some_mode')
+sim = simulation(0.004, 2, 'some_mode')
 
 
 
@@ -375,13 +377,16 @@ fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 
 # Plot the trajectory with scatter points and control the size with 's'
-scatter_size = 10  # Adjust this value to make points smaller or larger
+scatter_size = 8  # Adjust this value to make points smaller or larger
 ax.scatter(x, y, z, label='Trajectory', s=scatter_size, c='b', marker='o')
 
 # Add labels for the axes
 ax.set_xlabel('X Label')
 ax.set_ylabel('Y Label')
 ax.set_zlabel('Z Label')
+ax.set_xlim([0, 10])
+ax.set_ylim([0, 10])
+ax.set_zlim([0, 10])
 
 # Add a legend
 ax.legend()
