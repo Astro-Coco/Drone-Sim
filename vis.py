@@ -29,6 +29,36 @@ nano=box(lenght=1.75,width=.6,height=.1,pos=vector(-2,.1+.05,0),color=color.gree
 myObj=compound([bBoard,bn,nano])
 
 
+def create_orientation_program(dt, total_time):
+    t = []
+    rolls = []
+    pitchs = []
+    for time in np.arange(0, total_time, dt):
+
+
+
+        t.append(time)
+        if (time<0.5):
+            roll = 5
+            pitch = 5
+        elif (time < 1):
+            roll = -15
+            pitch = -15
+        elif (time < 1.5):
+            roll = 30
+            pitch = -15
+        elif (time < 2):
+            roll = 0
+            pitch = 0
+
+        rolls.append(roll)
+        pitchs.append(pitch)
+
+
+    orientation_program = (t,(rolls,pitchs))
+    return orientation_program
+
+
 
 class Imu():
     def __init__(self):
@@ -39,11 +69,11 @@ class Imu():
         self.yaw = 0
         
 
-    def compute_noise(self, roll, pitch, yaw, time):
+    def compute_imu_angles_and_noise(self, roll, pitch, yaw, time):
 
-        noise_fonc_cap = (np.sin(4 * time) + 0.3 * np.sin(40 * time))
+        noise_fonc_cap = 0.5*(np.sin(4 * time) + 0.3 * np.sin(40 * time))
 
-        imu_noise = False
+        imu_noise = True
 
         if imu_noise:
             roll_noise = np.random.random()*noise_fonc_cap
@@ -122,15 +152,17 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        DesiredRoll = 15
-        DesiredPitch = 15
+        (t, orientations) = create_orientation_program(self.dt, self.sim_time)
+
 
         while (self.time < self.sim_time):
             RateRoll = self.angular_speed[0]
             RatePitch = self.angular_speed[1]
             RateYaw = self.angular_speed[2]
 
-            self.drone_software.apply_PID_loops(DesiredRoll, DesiredPitch, self.imu.roll, self.imu.pitch, RateRoll, RatePitch, RateYaw)
+            self.DesiredRoll, self.DesiredPitch = orientations[0][self.i], orientations[1][self.i]
+
+            self.drone_software.apply_PID_loops(self.DesiredRoll, self.DesiredPitch, self.imu.roll, self.imu.pitch, RateRoll, RatePitch, RateYaw)
             self.motor1.pwm, self.motor2.pwm, self.motor3.pwm, self. motor4.pwm = self.drone_software.compute_motor_inputs(self.throttle)
         
             self.compute_motor_forces()
@@ -181,13 +213,14 @@ class simulation:
         pitch *= 180/np.pi
 
         yaw = 0
-        self.imu.compute_noise(roll, pitch, yaw, self.time)
+        self.imu.compute_imu_angles_and_noise(roll, pitch, yaw, self.time)
         
 
 
     def record_data(self):
         if self.first:
             self.data = {
+                'time' : [],
                 'pos' : [],
                 'speed' : [],
                 'acc' : [],
@@ -198,9 +231,14 @@ class simulation:
 
                 'roll' : [],
                 'pitch' : [],
+
+                'command_roll' : [],
+                'command_pitch' : []
             }
             self.first = False
         else:
+            self.data['time'].append(self.time)
+
             self.data['pos'].append(self.drone_pos)
             self.data['speed'].append(self.drone_speed)
             self.data['acc'].append( self.drone_acc)
@@ -211,6 +249,10 @@ class simulation:
 
             self.data['roll'].append(self.imu.roll)
             self.data['pitch'].append(self.imu.pitch)
+
+            self.data['command_roll'].append(self.DesiredRoll)
+            self.data['command_pitch'].append(self.DesiredPitch)
+
             #print(f' Time : {self.time} , Normal : {self.normal}')
 
 
@@ -281,7 +323,7 @@ class Drone_software():
 
         #angle pid values
         self.PRoll, self.PPitch = 2.5, 2.5
-        self.IRoll, self.IPitch = 0., 0.
+        self.IRoll, self.IPitch = 0.02, 0.02
         self.DRoll, self.DPitch = 0.1, 0.1
 
 
@@ -469,6 +511,16 @@ ax.set_zlim([0, 10])
 ax.legend()
 
 # Show the interactive plot
+plt.show()
+
+plt.plot(sim.data['time'], sim.data['roll'], label = 'actual roll')
+plt.plot(sim.data['time'], sim.data['command_roll'], label = 'command')
+plt.title('Roll versus command_roll')
+plt.show()
+
+plt.plot(sim.data['time'], sim.data['pitch'], label = 'actual pitch')
+plt.plot(sim.data['time'], sim.data['command_pitch'], label = 'command')
+plt.title('pitch versus command_pitch')
 plt.show()
 
 
