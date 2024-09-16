@@ -6,27 +6,7 @@ from time import *
 import math
 
  
-scene.range=5
-scene.background=color.yellow
-toRad=2*np.pi/360
-toDeg=1/toRad
-scene.forward=vector(-1,-1,-1)
- 
-scene.width=1200
-scene.height=1080
- 
-xarrow=arrow(lenght=2, shaftwidth=.1, color=color.red,axis=vector(1,0,0))
-yarrow=arrow(lenght=2, shaftwidth=.1, color=color.green,axis=vector(0,1,0))
-zarrow=arrow(lenght=4, shaftwidth=.1, color=color.blue,axis=vector(0,0,1))
- 
-frontArrow=arrow(length=4,shaftwidth=.1,color=color.purple,axis=vector(1,0,0))
-upArrow=arrow(length=1,shaftwidth=.1,color=color.magenta,axis=vector(0,1,0))
-sideArrow=arrow(length=2,shaftwidth=.1,color=color.orange,axis=vector(0,0,1))
- 
-bBoard=box(length=6,width=2,height=.2,opacity=.8,pos=vector(0,0,0,))
-bn=box(length=1,width=.75,height=.1, pos=vector(-.5,.1+.05,0),color=color.blue)
-nano=box(lenght=1.75,width=.6,height=.1,pos=vector(-2,.1+.05,0),color=color.green)
-myObj=compound([bBoard,bn,nano])
+
 
 
 def create_orientation_program(dt, total_time):
@@ -62,16 +42,19 @@ def create_orientation_program(dt, total_time):
 
 class Imu():
     def __init__(self):
-        self.roll_offset = 2
-        self.pitch_offset = 3
+        self.roll_offset = 0
+        self.pitch_offset = 0
         self.roll = 0
         self.pitch = 0
         self.yaw = 0
+
+    def noise_function(self, time):
+        return (np.sin(4 * time) + 0.3 * np.sin(40 * time))
         
 
     def compute_imu_angles_and_noise(self, roll, pitch, yaw, time):
 
-        noise_fonc_cap = 0.5*(np.sin(4 * time) + 0.3 * np.sin(40 * time))
+        noise_fonc_cap = self.noise_function(time)
 
         imu_noise = False
 
@@ -117,10 +100,6 @@ class simulation:
         self.drone_software.reset_pid()
 
         #real parameters
-        self.drone_pos = np.array([0.,0.,0.])
-        self.drone_position = vector(0, 0, 0)  # Starting position for visualization
-        self.drone_speed = np.array([0.,0.,0.])
-        self.drone_acc = np.array([0.,0.,0.])
         Ixx = 3.14e-3
         Iyy = Ixx
         Izz = 2.94e-3
@@ -146,6 +125,7 @@ class simulation:
 
 
         self.initialize()
+        self.set_up_scene()
 
         np.random.seed(42)
 
@@ -173,6 +153,29 @@ class simulation:
 
             self.time += self.dt
             self.i +=1
+
+    def set_up_scene(self):
+        scene.range=5
+        scene.background=color.yellow
+        toRad=2*np.pi/360
+        toDeg=1/toRad
+        scene.forward=vector(-1,-1,-1)
+        
+        scene.width=1200
+        scene.height=1080
+        
+        self.xarrow=arrow(lenght=2, shaftwidth=.1, color=color.red,axis=vector(1,0,0))
+        self.yarrow=arrow(lenght=2, shaftwidth=.1, color=color.green,axis=vector(0,1,0))
+        self.zarrow=arrow(lenght=4, shaftwidth=.1, color=color.blue,axis=vector(0,0,1))
+        
+        self.frontArrow=arrow(length=4,shaftwidth=.1,color=color.purple,axis=vector(1,0,0))
+        self.upArrow=arrow(length=1,shaftwidth=.1,color=color.magenta,axis=vector(0,1,0))
+        self.sideArrow=arrow(length=2,shaftwidth=.1,color=color.orange,axis=vector(0,0,1))
+        
+        bBoard=box(length=6,width=2,height=.2,opacity=.8,pos=vector(0,0,0,))
+        bn=box(length=1,width=.75,height=.1, pos=vector(-.5,.1+.05,0),color=color.blue)
+        nano=box(lenght=1.75,width=.6,height=.1,pos=vector(-2,.1+.05,0),color=color.green)
+        self.myObj=compound([bBoard,bn,nano])
 
     def compute_motor_forces(self):
         for motor in self.motors:
@@ -257,24 +260,10 @@ class simulation:
 
 
     def initialize(self):
-        self.x = 0
-        self.y = 0
-        self.z = 0
 
-        self.vx = 0
-        self.vy = 0
-        self.vz = 0
-        
-        self.ax = 0
-        self.ay = 0
-        self.az = 0
-
-        self.F1 = 0
-        self.F2 = 0
-        self.F3 = 0
-        self.F3 = 0
-        
-
+        self.drone_pos = np.array([0.,0.,0.])
+        self.drone_speed = np.array([0.,0.,0.])
+        self.drone_acc = np.array([0.,0.,0.])
         self.angular_accel = np.array([0,0,0])
         self.angular_speed = np.array([0,0,0])
 
@@ -298,14 +287,14 @@ class simulation:
             v=cross(s,k)
             vrot=v*cos(roll)+cross(k,v)*sin(roll)
     
-            frontArrow.axis=k
-            sideArrow.axis=cross(k,vrot)
-            upArrow.axis=vrot
-            myObj.axis=k
-            myObj.up=vrot
-            sideArrow.length=2
-            frontArrow.length=4
-            upArrow.length=1
+            self.frontArrow.axis=k
+            self.sideArrow.axis=cross(k,vrot)
+            self.upArrow.axis=vrot
+            self.myObj.axis=k
+            self.myObj.up=vrot
+            self.sideArrow.length=2
+            self.frontArrow.length=4
+            self.upArrow.length=1
             #self.drone_position += vector(speed_times_dt[0], speed_times_dt[1], speed_times_dt[2])
             #myObj.pos = vector(self.drone)  # Move the object to the new position
         except:
@@ -365,7 +354,7 @@ class Drone_software():
         DesiredRatePitch, self.PrevErrorPitch, self.PrevItermPitch = self.pid_equation(ErrorPitch, self.PPitch, self.IPitch, self.DPitch, self.PrevErrorPitch, self.PrevItermPitch)
 
         #ChangeRateYaw
-        DesiredRateYaw = 5
+        DesiredRateYaw = 0
 
         ErrorRateRoll = DesiredRateRoll - RateRoll
         ErrorRatePitch = DesiredRatePitch - RatePitch
