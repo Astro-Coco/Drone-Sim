@@ -5,6 +5,7 @@ from vpython import *
 from time import *
 import math
 import pandas as pd
+from matplotlib.gridspec import GridSpec
 
 def create_orientation_program(dt = 0.004, total_time = 2, duration_of_commands = 0.5, transition_time = 0.1, number_of_smoothing = 1,  *command_tuple):
     total_number_of_data = int(total_time/dt)    
@@ -128,7 +129,7 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 2, 0.15, 3, (0,0), (10,0))
+        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.5, 0.1, 2, (0,0), (10,0), (-10,0), (0,0), (0,25))
 
         while self.time < self.sim_time:
             RateRoll = self.angular_speed[0]
@@ -158,6 +159,8 @@ class simulation:
             self.motor1.pwm, self.motor2.pwm, self.motor3.pwm, self.motor4.pwm = (
                 self.drone_software.compute_motor_inputs(self.throttle)
             )
+            self.roll_pid = self.drone_software.InputRoll
+            self.pitch_pid = self.drone_software.InputPitch
 
             self.compute_motor_forces()
             self.compute_force_and_torque()
@@ -299,6 +302,8 @@ class simulation:
                 "pitch": [],
                 "command_roll": [],
                 "command_pitch": [],
+                "roll_pid": [],
+                "pitch_pid": [],
             }
             self.first = False
         else:
@@ -317,6 +322,9 @@ class simulation:
 
             self.data["command_roll"].append(self.DesiredRoll)
             self.data["command_pitch"].append(self.DesiredPitch)
+
+            self.data["roll_pid"].append(self.roll_pid)
+            self.data["pitch_pid"].append(self.pitch_pid)
 
             # print(f' Time : {self.time} , Normal : {self.normal}')
 
@@ -601,18 +609,21 @@ def quaternion_to_euler(q):
 sim = simulation(0.004, 4, "some_mode")
 
 
-
+# Prepare data
 trajectory = np.array(sim.data["pos"])
 x = trajectory[:, 0]
 y = trajectory[:, 1]
 z = trajectory[:, 2]
 
-# Create a new figure with 3 subplots (1 for 3D plot, 2 for 2D time series)
-fig = plt.figure(figsize=(10, 8))
+# Create a new figure with 6 subplots (2x3 grid)
+fig = plt.figure(figsize=(15, 12))
+
+gs = GridSpec(2, 3, width_ratios=[2, 1, 1], height_ratios=[1, 1], hspace=0.3, wspace=0.1)
 
 # First subplot: 3D trajectory
-ax1 = fig.add_subplot(221, projection="3d")
-scatter_size = 4  
+ax1 = fig.add_subplot(gs[0, 0], projection="3d")
+ax1.figsize = 4
+scatter_size = 2 
 ax1.scatter(x, y, z, label="Trajectory", s=scatter_size, c="b", marker="o")
 ax1.set_xlabel("X Label")
 ax1.set_ylabel("Y Label")
@@ -623,7 +634,7 @@ ax1.set_zlim([0, 8])
 ax1.legend()
 
 # Second subplot: Roll vs command_roll
-ax2 = fig.add_subplot(223)  # 2x2 grid, bottom left
+ax2 = fig.add_subplot(gs[0, 1])
 ax2.plot(sim.data["time"], sim.data["roll"], label="actual roll", color="b")
 ax2.plot(sim.data["time"], sim.data["command_roll"], label="command", color="r", linestyle="--")
 ax2.set_title("Roll vs Command Roll")
@@ -632,7 +643,7 @@ ax2.set_ylabel("Roll")
 ax2.legend()
 
 # Third subplot: Pitch vs command_pitch
-ax3 = fig.add_subplot(224)  # 2x2 grid, bottom right
+ax3 = fig.add_subplot(gs[0, 2])
 ax3.plot(sim.data["time"], sim.data["pitch"], label="actual pitch", color="b")
 ax3.plot(sim.data["time"], sim.data["command_pitch"], label="command", color="r", linestyle="--")
 ax3.set_title("Pitch vs Command Pitch")
@@ -640,8 +651,23 @@ ax3.set_xlabel("Time")
 ax3.set_ylabel("Pitch")
 ax3.legend()
 
+# Fourth subplot: Roll PID value
+ax4 = fig.add_subplot(gs[1, 1])
+ax4.plot(sim.data["time"], sim.data["roll_pid"], color="b")
+ax4.set_title("Roll PID Value")
+ax4.set_xlabel("Time")
+ax4.set_ylabel("Roll PID")
+
+# Fifth subplot: Pitch PID value
+ax5 = fig.add_subplot(gs[1, 2])
+ax5.plot(sim.data["time"], sim.data["pitch_pid"], color="b")
+ax5.set_title("Pitch PID Value")
+ax5.set_xlabel("Time")
+ax5.set_ylabel("Pitch PID")
+
 # Adjust layout so subplots don't overlap
 plt.tight_layout()
 
+plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1, wspace=0.4, hspace=0.4)
 # Show the combined figure
 plt.show()
