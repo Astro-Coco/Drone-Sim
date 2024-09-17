@@ -129,7 +129,7 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.5, 0.1, 2, (0,0), (10,0), (-10,0), (0,0), (0,25))
+        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.3, 0.1, 2, (0,0), (10,0), (-10,0), (0,0), (0,25), (25,0),(30,0))
 
         while self.time < self.sim_time:
             RateRoll = self.angular_speed[0]
@@ -384,7 +384,7 @@ class simulation:
 class Drone_software:
     def __init__(self):
         # rate pid values
-        self.PRateRoll, self.PRatePitch, self.PRateYaw = 4, 4, 0.0
+        self.PRateRoll, self.PRatePitch, self.PRateYaw = 5, 5, 0.0
         self.IRateRoll, self.IRatePitch, self.IRateYaw = 1, 1, 0.0
         self.DRateRoll, self.DRatePitch, self.DRateYaw = 0.11, 0.11, 0.0
 
@@ -618,11 +618,10 @@ z = trajectory[:, 2]
 # Create a new figure with 6 subplots (2x3 grid)
 fig = plt.figure(figsize=(15, 12))
 
-gs = GridSpec(2, 3, width_ratios=[2, 1, 1], height_ratios=[1, 1], hspace=0.3, wspace=0.1)
+gs = GridSpec(2, 3, width_ratios=[1, 1, 1], height_ratios=[1, 1], hspace=0.3, wspace=0.2)
 
 # First subplot: 3D trajectory
 ax1 = fig.add_subplot(gs[0, 0], projection="3d")
-ax1.figsize = 4
 scatter_size = 2 
 ax1.scatter(x, y, z, label="Trajectory", s=scatter_size, c="b", marker="o")
 ax1.set_xlabel("X Label")
@@ -665,9 +664,7 @@ ax5.set_title("Pitch PID Value")
 ax5.set_xlabel("Time")
 ax5.set_ylabel("Pitch PID")
 
-# Adjust layout so subplots don't overlap
-plt.tight_layout()
 
-plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1, wspace=0.4, hspace=0.4)
+plt.subplots_adjust(left=0, right=0.95, top=0.95, bottom=0.05, wspace=0.4, hspace=0.4)
 # Show the combined figure
 plt.show()
