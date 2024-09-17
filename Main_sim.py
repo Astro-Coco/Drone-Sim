@@ -6,7 +6,7 @@ from time import *
 import math
 import pandas as pd
 
-def create_orientation_program(dt = 0.004, total_time = 2, duration_of_commands = 0.5, transition_time = 0.1, number_of_smoothing = 2,  *command_tuple):
+def create_orientation_program(dt = 0.004, total_time = 2, duration_of_commands = 0.5, transition_time = 0.1, number_of_smoothing = 1,  *command_tuple):
     total_number_of_data = int(total_time/dt)    
     number_of_commands = len(command_tuple)
     
@@ -128,7 +128,7 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.5, 0.05, 1, (10,10), (-10,-10), (-10,-10), (20, 0), (-20,0))
+        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.5, 0.15, 3, (10,10), (-10,-10), (-10,-10), (20, 0), (-20,0),(-20,0))
 
         while self.time < self.sim_time:
             RateRoll = self.angular_speed[0]
@@ -242,6 +242,15 @@ class simulation:
         )
         self.force_array = self.normal * self.force
 
+        air_density = 1.225 #Kg/m^3
+        C_d = 1.1
+        Area_cross_section = 0.15*0.15
+
+        Drag_force = -0.5*air_density*C_d*Area_cross_section*self.drone_speed*np.linalg.norm(self.drone_speed)
+
+        self.force_array += Drag_force
+        
+
         self.torque = np.array([0.0, 0.0, 0.0])
         for motor in self.motors:
             self.torque = self.torque + np.cross(
@@ -353,12 +362,12 @@ class simulation:
 class Drone_software:
     def __init__(self):
         # rate pid values
-        self.PRateRoll, self.PRatePitch, self.PRateYaw = 3, 3, 0.0
+        self.PRateRoll, self.PRatePitch, self.PRateYaw = 4, 4, 0.0
         self.IRateRoll, self.IRatePitch, self.IRateYaw = 1, 1, 0.0
         self.DRateRoll, self.DRatePitch, self.DRateYaw = 0.11, 0.11, 0.0
 
         # angle pid values
-        self.PRoll, self.PPitch = 2, 2
+        self.PRoll, self.PPitch = 2.5, 2.5
         self.IRoll, self.IPitch = 0.0, 0.0
         self.DRoll, self.DPitch = 0.1, 0.1
 
@@ -575,7 +584,7 @@ def quaternion_to_euler(q):
     return roll, pitch, yaw
 
 
-sim = simulation(0.004, 5, "some_mode")
+sim = simulation(0.004, 4, "some_mode")
 
 
 
