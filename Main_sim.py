@@ -1,4 +1,44 @@
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+from vpython import *
+from time import *
+import math
+
+ 
+
+
+
+def create_orientation_program(dt, total_time):
+    t = []
+    rolls = []
+    pitchs = []
+    for time in np.arange(0, total_time, dt):
+
+
+
+        t.append(time)
+        if (time<0.5):
+            roll = 5
+            pitch = 5
+        elif (time < 1):
+            roll = -15
+            pitch = -15
+        elif (time < 1.5):
+            roll = 30
+            pitch = -15
+        elif (time < 2):
+            roll = 0
+            pitch = 0
+
+        rolls.append(roll)
+        pitchs.append(pitch)
+
+
+    orientation_program = (t,(rolls,pitchs))
+    return orientation_program
+
+
 
 class Imu():
     def __init__(self):
@@ -7,16 +47,30 @@ class Imu():
         self.roll = 0
         self.pitch = 0
         self.yaw = 0
+
+    def noise_function(self, time):
+        return (np.sin(4 * time) + 0.3 * np.sin(40 * time))
         
 
-    def compute_noise(self, roll, pitch, yaw):
-        roll_noise = 0
-        pitch_noise = 0
-        yaw_noise = 0
+    def compute_imu_angles_and_noise(self, roll, pitch, yaw, time):
+
+        noise_fonc_cap = self.noise_function(time)
+
+        imu_noise = False
+
+        if imu_noise:
+            roll_noise = np.random.random()*noise_fonc_cap
+            pitch_noise = np.random.random()*noise_fonc_cap
+            yaw_noise =np.random.random()*noise_fonc_cap
+        else:
+            roll_noise = 0
+            pitch_noise = 0
+            yaw_noise = 0
 
         self.roll = roll + self.roll_offset + roll_noise
         self.pitch = pitch + self.pitch_offset + pitch_noise
         self.yaw = yaw + yaw_noise
+
 
         return roll, pitch, yaw
 
@@ -32,14 +86,13 @@ class motor:
         self.thrust_fraction = thrust_fraction
         self.max_thrust = g*motor_nominal_thrust*self.thrust_fraction #To newtons and scaled with thrust fraction
 
-        self.pwm = 1500
-        self.thrust = 0
+        self.pwm = 1512
 
 class simulation:
-    def __init__(self, dt, time, mode):
+    def __init__(self, dt, sim_time, mode):
         self.dt = dt
         self.time = 0
-        self.timer = time
+        self.sim_time = sim_time
         self.mode = mode
 
         self.imu = Imu()
@@ -47,9 +100,6 @@ class simulation:
         self.drone_software.reset_pid()
 
         #real parameters
-        self.drone_pos = np.array([0.,0.,0.])
-        self.drone_speed = np.array([0.,0.,0.])
-        self.drone_acc = np.array([0.,0.,0.])
         Ixx = 3.14e-3
         Iyy = Ixx
         Izz = 2.94e-3
@@ -67,36 +117,65 @@ class simulation:
         #fraction of power motor has
         #ADJUST POSITIONS
         self.motor1 = motor(0.10,0.10,1.0)
-        self.motor2 = motor(0.10,-0.10,1.0)
-        self.motor3 = motor(-0.10,-0.10,1)
-        self.motor4 = motor(-0.10,0.10,1)
+        self.motor2 = motor(-0.10,0.10,1.0)
+        self.motor3 = motor(-0.10,-0.10,1.0)
+        self.motor4 = motor(0.10,-0.10,1.0)
 
         self.motors = [self.motor1, self.motor2, self.motor3, self.motor4]
 
 
         self.initialize()
+        self.set_up_scene()
+
+        np.random.seed(42)
 
         self.run_mainloop()
 
     def run_mainloop(self):
-        DesiredRoll = 0
-        DesiredPitch = 0
+        (t, orientations) = create_orientation_program(self.dt, self.sim_time)
 
-        while (self.time < self.timer):
+
+        while (self.time < self.sim_time):
             RateRoll = self.angular_speed[0]
             RatePitch = self.angular_speed[1]
             RateYaw = self.angular_speed[2]
 
-            self.drone_software.apply_PID_loops(DesiredRoll, DesiredPitch, self.imu.roll, self.imu.pitch, RateRoll, RatePitch, RateYaw)
-            self.drone_software.compute_motor_inputs(self.throttle)
+            self.DesiredRoll, self.DesiredPitch = orientations[0][self.i], orientations[1][self.i]
+
+            self.drone_software.apply_PID_loops(self.DesiredRoll, self.DesiredPitch, self.imu.roll, self.imu.pitch, RateRoll, RatePitch, RateYaw)
+            self.motor1.pwm, self.motor2.pwm, self.motor3.pwm, self. motor4.pwm = self.drone_software.compute_motor_inputs(self.throttle)
         
             self.compute_motor_forces()
             self.compute_force_and_torque()
             self.compute_dynamics()
             self.record_data()
+            self.visualize(self.q, self.drone_speed*self.dt, self.drone_pos)
 
             self.time += self.dt
             self.i +=1
+
+    def set_up_scene(self):
+        scene.range=5
+        scene.background=color.yellow
+        toRad=2*np.pi/360
+        toDeg=1/toRad
+        scene.forward=vector(-1,-1,-1)
+        
+        scene.width=1200
+        scene.height=1080
+        
+        self.xarrow=arrow(lenght=2, shaftwidth=.1, color=color.red,axis=vector(1,0,0))
+        self.yarrow=arrow(lenght=2, shaftwidth=.1, color=color.green,axis=vector(0,1,0))
+        self.zarrow=arrow(lenght=4, shaftwidth=.1, color=color.blue,axis=vector(0,0,1))
+        
+        self.frontArrow=arrow(length=4,shaftwidth=.1,color=color.purple,axis=vector(1,0,0))
+        self.upArrow=arrow(length=1,shaftwidth=.1,color=color.magenta,axis=vector(0,1,0))
+        self.sideArrow=arrow(length=2,shaftwidth=.1,color=color.orange,axis=vector(0,0,1))
+        
+        bBoard=box(length=6,width=2,height=.2,opacity=.8,pos=vector(0,0,0,))
+        bn=box(length=1,width=.75,height=.1, pos=vector(-.5,.1+.05,0),color=color.blue)
+        nano=box(lenght=1.75,width=.6,height=.1,pos=vector(-2,.1+.05,0),color=color.green)
+        self.myObj=compound([bBoard,bn,nano])
 
     def compute_motor_forces(self):
         for motor in self.motors:
@@ -137,13 +216,14 @@ class simulation:
         pitch *= 180/np.pi
 
         yaw = 0
-        self.imu.compute_noise(roll, pitch, yaw)
+        self.imu.compute_imu_angles_and_noise(roll, pitch, yaw, self.time)
         
 
 
     def record_data(self):
         if self.first:
             self.data = {
+                'time' : [],
                 'pos' : [],
                 'speed' : [],
                 'acc' : [],
@@ -154,9 +234,14 @@ class simulation:
 
                 'roll' : [],
                 'pitch' : [],
+
+                'command_roll' : [],
+                'command_pitch' : []
             }
             self.first = False
         else:
+            self.data['time'].append(self.time)
+
             self.data['pos'].append(self.drone_pos)
             self.data['speed'].append(self.drone_speed)
             self.data['acc'].append( self.drone_acc)
@@ -167,51 +252,74 @@ class simulation:
 
             self.data['roll'].append(self.imu.roll)
             self.data['pitch'].append(self.imu.pitch)
-            print(f' Time : {self.time} , Normal : {self.normal}')
+
+            self.data['command_roll'].append(self.DesiredRoll)
+            self.data['command_pitch'].append(self.DesiredPitch)
+
+            #print(f' Time : {self.time} , Normal : {self.normal}')
 
 
     def initialize(self):
-        self.x = 0
-        self.y = 0
-        self.z = 0
 
-        self.vx = 0
-        self.vy = 0
-        self.vz = 0
-        
-        self.ax = 0
-        self.ay = 0
-        self.az = 0
-
-        self.F1 = 0
-        self.F2 = 0
-        self.F3 = 0
-        self.F3 = 0
-        
-
+        self.drone_pos = np.array([0.,0.,0.])
+        self.drone_speed = np.array([0.,0.,0.])
+        self.drone_acc = np.array([0.,0.,0.])
         self.angular_accel = np.array([0,0,0])
         self.angular_speed = np.array([0,0,0])
 
         self.throttle = 1500
+
+    def visualize(self,quaternion, speed_times_dt, pos):
+        try:
+            q0=float(quaternion[0])
+            q1=float(quaternion[1])
+            q2=float(quaternion[2])
+            q3=float(quaternion[3])
+    
+            roll=-math.atan2(2*(q0*q1+q2*q3),1-2*(q1*q1+q2*q2))
+            pitch=math.asin(2*(q0*q2-q3*q1))
+            yaw=-math.atan2(2*(q0*q3+q1*q2),1-2*(q2*q2+q3*q3))-np.pi/2
+    
+            rate(50)
+            k=vector(cos(yaw)*cos(pitch), sin(pitch),sin(yaw)*cos(pitch))
+            y=vector(0,1,0)
+            s=cross(k,y)
+            v=cross(s,k)
+            vrot=v*cos(roll)+cross(k,v)*sin(roll)
+    
+            self.frontArrow.axis=k
+            self.sideArrow.axis=cross(k,vrot)
+            self.upArrow.axis=vrot
+            self.myObj.axis=k
+            self.myObj.up=vrot
+            self.sideArrow.length=2
+            self.frontArrow.length=4
+            self.upArrow.length=1
+            #self.drone_position += vector(speed_times_dt[0], speed_times_dt[1], speed_times_dt[2])
+            #myObj.pos = vector(self.drone)  # Move the object to the new position
+        except:
+            pass
+
 
 
 
 class Drone_software():
     def __init__(self):
         #rate pid values
-        self.PRateRoll, self.PRatePitch, self.PRateYaw = 1., 1., 0.
-        self.IRateRoll, self.IRatePitch, self.IRateYaw = 0., 0., 0.
-        self.DRateRoll, self.DRatePitch,self.DRateYaw = 0., 0., 0.
+        self.PRateRoll, self.PRatePitch, self.PRateYaw = 4, 4, 0.0
+        self.IRateRoll, self.IRatePitch, self.IRateYaw = 2, 2, 0.
+        self.DRateRoll, self.DRatePitch,self.DRateYaw = 0.11, 0.11, 0.0
 
         #angle pid values
-        self.PRoll, self.PPitch = 2., 2.
-        self.IRoll, self.IPitch = 0., 0.
-        self.DRoll, self.DPitch = 0., 0.
+        self.PRoll, self.PPitch = 2.5, 2.5
+        self.IRoll, self.IPitch = 0.0, 0.0
+        self.DRoll, self.DPitch = 0.1, 0.1
 
 
     def pid_equation(self,Error, P, I, D, PrevError, PrevIterm):
         MaxPIDvalues = 300
         time_passed = 0.004
+
 
         Pterm = P*Error
         Iterm = PrevIterm + I*(Error + PrevError)*time_passed/2
@@ -304,7 +412,6 @@ class Drone_software():
 
 
 
-
 def quaternion_multiply(q1, q2):
     w1, x1, y1, z1 = q1
     w2, x2, y2, z2 = q2
@@ -347,14 +454,62 @@ def rotate_vector(v, q):
 
 def quaternion_to_euler(q):
     w, x, y, z = q
+
+    q0, q1, q2, q3 = w, x, y ,z
     
     # Roll (φ)
     roll = np.arctan2(2 * (w * x + y * z), 1 - 2 * (x**2 + y**2))
     
     # Pitch (θ)
     pitch = np.arcsin(2 * (w * y - z * x))
+
+
+    yaw=-math.atan2(2*(q0*q3+q1*q2),1-2*(q2*q2+q3*q3))-np.pi/2
     
     return roll, pitch
 
-if __name__ == '__main__':
-    simulation(0.004, 5, 'some_mode')
+
+sim = simulation(0.004, 2, 'some_mode')
+
+
+
+
+trajectory = np.array(sim.data['pos'])
+
+x = trajectory[:, 0]
+y = trajectory[:, 1]
+z = trajectory[:, 2]
+
+# Create a new figure
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+
+# Plot the trajectory with scatter points and control the size with 's'
+scatter_size = 8  # Adjust this value to make points smaller or larger
+ax.scatter(x, y, z, label='Trajectory', s=scatter_size, c='b', marker='o')
+
+# Add labels for the axes
+ax.set_xlabel('X Label')
+ax.set_ylabel('Y Label')
+ax.set_zlabel('Z Label')
+ax.set_xlim([0, 10])
+ax.set_ylim([0, 10])
+ax.set_zlim([0, 10])
+
+# Add a legend
+ax.legend()
+
+# Show the interactive plot
+plt.show()
+
+plt.plot(sim.data['time'], sim.data['roll'], label = 'actual roll')
+plt.plot(sim.data['time'], sim.data['command_roll'], label = 'command')
+plt.title('Roll versus command_roll')
+plt.show()
+
+plt.plot(sim.data['time'], sim.data['pitch'], label = 'actual pitch')
+plt.plot(sim.data['time'], sim.data['command_pitch'], label = 'command')
+plt.title('pitch versus command_pitch')
+plt.show()
+
+
