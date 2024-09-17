@@ -128,7 +128,7 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.5, 0.15, 3, (10,10), (-10,-10), (-10,-10), (20, 0), (-20,0),(-20,0))
+        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 2, 0.15, 3, (0,0), (10,0))
 
         while self.time < self.sim_time:
             RateRoll = self.angular_speed[0]
@@ -189,13 +189,19 @@ class simulation:
         )
 
         self.frontArrow = arrow(
-            length=4, shaftwidth=0.1, color=color.purple, axis=vector(1, 0, 0)
+            length=4, shaftwidth=0.05, color=color.purple, axis=vector(1, 0, 0)
         )
         self.upArrow = arrow(
-            length=1, shaftwidth=0.1, color=color.magenta, axis=vector(0, 1, 0)
+            length=1, shaftwidth=0.05, color=color.magenta, axis=vector(0, 1, 0)
         )
         self.sideArrow = arrow(
-            length=2, shaftwidth=0.1, color=color.orange, axis=vector(0, 0, 1)
+            length=2, shaftwidth=0.05, color=color.orange, axis=vector(0, 0, 1)
+        )
+        self.speedArrow = arrow(
+            length=0, shaftwidth=0.08, color=color.black, axis=vector(0, 0, 1)
+        )
+        self.accelArrow = arrow(
+            length=0, shaftwidth=0.08, color=color.cyan, axis=vector(0, 0, 1)
         )
 
         bBoard = box(
@@ -353,6 +359,14 @@ class simulation:
             self.sideArrow.length = 2
             self.frontArrow.length = 4
             self.upArrow.length = 1
+
+            self.speedArrow.length = np.linalg.norm(self.drone_speed)
+            self.speedArrow.axis = vector(self.drone_speed[1], self.drone_speed[2], self.drone_speed[0])
+
+            self.accelArrow.length = np.linalg.norm(self.drone_acc)
+            self.accelArrow.axis = vector(self.drone_acc[1], self.drone_acc[2], self.drone_acc[0])
+
+
             # self.drone_position += vector(speed_times_dt[0], speed_times_dt[1], speed_times_dt[2])
             # myObj.pos = vector(self.drone)  # Move the object to the new position
         except:
