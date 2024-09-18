@@ -130,7 +130,8 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.3, 0.1, 2, (0,0), (10,0), (-10,0))
+        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.5, 0.1, 2, (0,0),(-20,0))
+        self.DesiredRateYaw = -np.pi/2
 
         while self.time < self.sim_time:
             RateRoll = self.angular_speed[0]
@@ -151,6 +152,7 @@ class simulation:
             self.drone_software.apply_PID_loops(
                 self.DesiredRoll,
                 self.DesiredPitch,
+                self.DesiredRateYaw,
                 self.imu.roll,
                 self.imu.pitch,
                 RateRoll,
@@ -162,6 +164,7 @@ class simulation:
             )
             self.roll_pid = self.drone_software.InputRoll
             self.pitch_pid = self.drone_software.InputPitch
+            self.yaw_pid = self.drone_software.InputYaw
 
             self.compute_motor_forces()
             self.compute_force_and_torque()
@@ -315,6 +318,9 @@ class simulation:
                 "command_pitch": [],
                 "roll_pid": [],
                 "pitch_pid": [],
+                "command_yaw":[],
+                "yaw_speed": [],
+                "yaw_pid": []
             }
             self.first = False
         else:
@@ -336,6 +342,10 @@ class simulation:
 
             self.data["roll_pid"].append(self.roll_pid)
             self.data["pitch_pid"].append(self.pitch_pid)
+
+            self.data['command_yaw'].append(self.DesiredRateYaw*180/np.pi)
+            self.data['yaw_speed'].append(self.angular_speed[2]*180/np.pi)
+            self.data['yaw_pid'].append(self.yaw_pid)
 
             # print(f' Time : {self.time} , Normal : {self.normal}')
 
@@ -395,9 +405,9 @@ class simulation:
 class Drone_software:
     def __init__(self):
         # rate pid values
-        self.PRateRoll, self.PRatePitch, self.PRateYaw = 5, 5, 0.0
+        self.PRateRoll, self.PRatePitch, self.PRateYaw = 4, 4, 1
         self.IRateRoll, self.IRatePitch, self.IRateYaw = 1, 1, 0.0
-        self.DRateRoll, self.DRatePitch, self.DRateYaw = 0.11, 0.11, 0.0
+        self.DRateRoll, self.DRatePitch, self.DRateYaw = 0.11, 0.11, 0.02
 
         # angle pid values
         self.PRoll, self.PPitch = 2.5, 2.5
@@ -436,6 +446,7 @@ class Drone_software:
         self,
         DesiredRoll,
         DesiredPitch,
+        DesiredRateYaw,
         madwickroll,
         madwickpitch,
         RateRoll,
@@ -463,8 +474,7 @@ class Drone_software:
             self.PrevItermPitch,
         )
 
-        # ChangeRateYaw
-        DesiredRateYaw = -np.pi/2
+        
 
         ErrorRateRoll = DesiredRateRoll - RateRoll
         ErrorRatePitch = DesiredRatePitch - RatePitch
@@ -617,20 +627,15 @@ def quaternion_to_euler(q):
     return roll, pitch, yaw
 
 def visualisation(sim):
-    # Prepare data
+    # Prepare data for 3D trajectory
     trajectory = np.array(sim.data["pos"])
     x = trajectory[:, 0]
     y = trajectory[:, 1]
     z = trajectory[:, 2]
 
-    # Create a new figure with 6 subplots (2x3 grid)
-    fig = plt.figure(figsize=(15, 12))
-
-    gs = GridSpec(2, 3, width_ratios=[1, 1, 1], height_ratios=[1, 1], hspace=0.3, wspace=0.2)
-
-
-    # First subplot: 3D trajectory
-    ax1 = fig.add_subplot(gs[0, 0], projection="3d")
+    # Create a figure for the 3D trajectory
+    fig1 = plt.figure(figsize=(8, 8))
+    ax1 = fig1.add_subplot(111, projection="3d")
     scatter_size = 2 
     ax1.scatter(x, y, z, label="Trajectory", s=scatter_size, c="b", marker="o")
     ax1.set_xlabel("X Label")
@@ -640,47 +645,78 @@ def visualisation(sim):
     ax1.set_ylim([-4, 4])
     ax1.set_zlim([0, 8])
     ax1.legend()
+    ax1.minorticks_on()
+    ax1.grid(which='both', linestyle=':', linewidth=0.5)
 
-    # Second subplot: Roll vs command_roll
-    ax2 = fig.add_subplot(gs[0, 1])
+    # Create the figure for time-series and PID values
+    fig2 = plt.figure(figsize=(15, 12))
+    gs = GridSpec(2, 3, width_ratios=[1, 1, 1], height_ratios=[1, 1], hspace=0.3, wspace=0.2)
+
+    # First subplot: Roll vs command_roll
+    ax2 = fig2.add_subplot(gs[0, 0])
     ax2.plot(sim.data["time"], sim.data["roll"], label="actual roll", color="b")
     ax2.plot(sim.data["time"], sim.data["command_roll"], label="command", color="r", linestyle="--")
     ax2.set_title("Roll vs Command Roll")
     ax2.set_xlabel("Time")
     ax2.set_ylabel("Roll")
     ax2.legend()
+    ax2.minorticks_on()
+    ax2.grid(which='both', linestyle=':', linewidth=0.5)
 
-    # Third subplot: Pitch vs command_pitch
-    ax3 = fig.add_subplot(gs[0, 2])
+    # Second subplot: Pitch vs command_pitch
+    ax3 = fig2.add_subplot(gs[0, 1])
     ax3.plot(sim.data["time"], sim.data["pitch"], label="actual pitch", color="b")
     ax3.plot(sim.data["time"], sim.data["command_pitch"], label="command", color="r", linestyle="--")
     ax3.set_title("Pitch vs Command Pitch")
     ax3.set_xlabel("Time")
     ax3.set_ylabel("Pitch")
     ax3.legend()
+    ax3.minorticks_on()
+    ax3.grid(which='both', linestyle=':', linewidth=0.5)
+
+    # Third subplot: Yaw speed vs command_yaw
+    ax6 = fig2.add_subplot(gs[0, 2])
+    ax6.plot(sim.data["time"], sim.data["yaw_speed"], color="b")
+    ax6.plot(sim.data["time"], sim.data["command_yaw"], label="command", color="r", linestyle="--")
+    ax6.set_title("Yaw Speed vs Command Yaw")
+    ax6.set_xlabel("Time")
+    ax6.set_ylabel("Yaw Speed")
+    ax6.legend()
+    ax6.minorticks_on()
+    ax6.grid(which='both', linestyle=':', linewidth=0.5)
 
     # Fourth subplot: Roll PID value
-    ax4 = fig.add_subplot(gs[1, 1])
+    ax4 = fig2.add_subplot(gs[1, 0])
     ax4.plot(sim.data["time"], sim.data["roll_pid"], color="b")
     ax4.set_title("Roll PID Value")
     ax4.set_xlabel("Time")
     ax4.set_ylabel("Roll PID")
+    ax4.minorticks_on()
+    ax4.grid(which='both', linestyle=':', linewidth=0.5)
 
     # Fifth subplot: Pitch PID value
-    ax5 = fig.add_subplot(gs[1, 2])
+    ax5 = fig2.add_subplot(gs[1, 1])
     ax5.plot(sim.data["time"], sim.data["pitch_pid"], color="b")
     ax5.set_title("Pitch PID Value")
     ax5.set_xlabel("Time")
     ax5.set_ylabel("Pitch PID")
+    ax5.minorticks_on()
+    ax5.grid(which='both', linestyle=':', linewidth=0.5)
 
+    # Sixth subplot: Yaw PID value
+    ax7 = fig2.add_subplot(gs[1, 2])
+    ax7.plot(sim.data["time"], sim.data["yaw_pid"], color="b")
+    ax7.set_title("Yaw PID Value")
+    ax7.set_xlabel("Time")
+    ax7.set_ylabel("Yaw PID")
+    ax7.minorticks_on()
+    ax7.grid(which='both', linestyle=':', linewidth=0.5)
 
-    plt.subplots_adjust(left=0, right=0.95, top=0.95, bottom=0.05, wspace=0.4, hspace=0.4)
-    # Show the combined figure
+    plt.subplots_adjust(left=0.07, right=0.96, top=0.93, bottom=0.07, wspace=0.4, hspace=0.4)
+
+    # Show both figures
     plt.show()
 
+# Example call to the function (replace with actual simulation call)
 sim = simulation(0.004, 4, "some_mode")
 visualisation(sim)
-
-
-
-
