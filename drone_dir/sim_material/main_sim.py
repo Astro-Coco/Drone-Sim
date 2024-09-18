@@ -74,10 +74,9 @@ class Imu:
 
 
 class motor:
-    def __init__(self, x, y, thrust_fraction, sens_rotation):
+    def __init__(self, x, y, thrust_fraction):
         g = 9.81
         motor_nominal_thrust = 0.8  # kg
-        self.sens_rotation = sens_rotation
 
         self.pos_to_center = np.array([x, y, 0])
         self.thrust_fraction = thrust_fraction
@@ -115,10 +114,10 @@ class simulation:
 
         # fraction of power motor has
         # ADJUST POSITIONS
-        self.motor1 = motor(0.10, 0.10, 1.0, 1)
-        self.motor2 = motor(-0.10, 0.10, 1.0, -1)
-        self.motor3 = motor(-0.10, -0.10, 1.0, 1)
-        self.motor4 = motor(0.10, -0.10, 1.0, -1)
+        self.motor1 = motor(0.10, 0.10, 1.0)
+        self.motor2 = motor(-0.10, 0.10, 1.0)
+        self.motor3 = motor(-0.10, -0.10, 1.0)
+        self.motor4 = motor(0.10, -0.10, 1.0)
 
         self.motors = [self.motor1, self.motor2, self.motor3, self.motor4]
 
@@ -130,7 +129,7 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 1, 0.1, 2, (0,0), (10,-10), (-10,10))
+        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.3, 0.1, 2, (0,0), (10,0), (-10,0), (0,0), (0,25), (25,0),(30,0))
 
         while self.time < self.sim_time:
             RateRoll = self.angular_speed[0]
@@ -274,22 +273,8 @@ class simulation:
         self.drone_speed = self.drone_speed + self.drone_acc * self.dt
         self.drone_pos = self.drone_pos + self.drone_speed * self.dt
 
-
-        
-        for motor in self.motors:
-            battery_voltage = 14.8
-            reduction_in_motor_speed = 0.75
-            motor_kv = 2300
-            angular_speed = reduction_in_motor_speed*battery_voltage*motor_kv*(motor.pwm-1000)/1000
-            angular_speed = angular_speed*np.pi/30
-            torque_coefficient = 0.000002
-            torque_generated = motor.sens_rotation*torque_coefficient*angular_speed*angular_speed
-            self.torque = self.torque + np.array([0, 0, torque_generated])
-
-
         self.angular_accel = self.inverse_inertial_matrix @ self.torque
         self.angular_speed = self.angular_speed + self.angular_accel * self.dt
-
         if self.i == 0:
             self.q = np.array([1, 0, 0, 0])
 
@@ -399,14 +384,14 @@ class simulation:
 class Drone_software:
     def __init__(self):
         # rate pid values
-        self.PRateRoll, self.PRatePitch, self.PRateYaw = 4, 4, 1
+        self.PRateRoll, self.PRatePitch, self.PRateYaw = 5, 5, 0.0
         self.IRateRoll, self.IRatePitch, self.IRateYaw = 1, 1, 0.0
-        self.DRateRoll, self.DRatePitch, self.DRateYaw = 0.11, 0.11, 0.02
+        self.DRateRoll, self.DRatePitch, self.DRateYaw = 0.11, 0.11, 0.0
 
         # angle pid values
-        self.PRoll, self.PPitch = 3., 3
+        self.PRoll, self.PPitch = 2.5, 2.5
         self.IRoll, self.IPitch = 0.0, 0.0
-        self.DRoll, self.DPitch = 0.11, 0.11
+        self.DRoll, self.DPitch = 0.1, 0.1
 
     def pid_equation(self, Error, P, I, D, PrevError, PrevIterm):
         MaxPIDvalues = 300
@@ -522,16 +507,16 @@ class Drone_software:
         # 1. Control mixer
         multiplication_factor = 1.024  # Check Carbon Aeronautics for more info
         MotorInput1 = multiplication_factor * (
-            throttle - self.InputRoll - self.InputPitch + self.InputYaw
+            throttle - self.InputRoll - self.InputPitch - self.InputYaw
         )
         MotorInput2 = multiplication_factor * (
-            throttle + self.InputRoll - self.InputPitch - self.InputYaw
+            throttle + self.InputRoll - self.InputPitch + self.InputYaw
         )
         MotorInput3 = multiplication_factor * (
-            throttle + self.InputRoll + self.InputPitch + self.InputYaw
+            throttle + self.InputRoll + self.InputPitch - self.InputYaw
         )
         MotorInput4 = multiplication_factor * (
-            throttle - self.InputRoll + self.InputPitch - self.InputYaw
+            throttle - self.InputRoll + self.InputPitch + self.InputYaw
         )
 
         # 2. Limit max and min thrust
@@ -620,67 +605,71 @@ def quaternion_to_euler(q):
 
     return roll, pitch, yaw
 
+def visualisation(sim):
+    # Prepare data
+    trajectory = np.array(sim.data["pos"])
+    x = trajectory[:, 0]
+    y = trajectory[:, 1]
+    z = trajectory[:, 2]
+
+    # Create a new figure with 6 subplots (2x3 grid)
+    fig = plt.figure(figsize=(15, 12))
+
+    gs = GridSpec(2, 3, width_ratios=[1, 1, 1], height_ratios=[1, 1], hspace=0.3, wspace=0.2)
+
+
+    # First subplot: 3D trajectory
+    ax1 = fig.add_subplot(gs[0, 0], projection="3d")
+    scatter_size = 2 
+    ax1.scatter(x, y, z, label="Trajectory", s=scatter_size, c="b", marker="o")
+    ax1.set_xlabel("X Label")
+    ax1.set_ylabel("Y Label")
+    ax1.set_zlabel("Z Label")
+    ax1.set_xlim([-4, 4])
+    ax1.set_ylim([-4, 4])
+    ax1.set_zlim([0, 8])
+    ax1.legend()
+
+    # Second subplot: Roll vs command_roll
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(sim.data["time"], sim.data["roll"], label="actual roll", color="b")
+    ax2.plot(sim.data["time"], sim.data["command_roll"], label="command", color="r", linestyle="--")
+    ax2.set_title("Roll vs Command Roll")
+    ax2.set_xlabel("Time")
+    ax2.set_ylabel("Roll")
+    ax2.legend()
+
+    # Third subplot: Pitch vs command_pitch
+    ax3 = fig.add_subplot(gs[0, 2])
+    ax3.plot(sim.data["time"], sim.data["pitch"], label="actual pitch", color="b")
+    ax3.plot(sim.data["time"], sim.data["command_pitch"], label="command", color="r", linestyle="--")
+    ax3.set_title("Pitch vs Command Pitch")
+    ax3.set_xlabel("Time")
+    ax3.set_ylabel("Pitch")
+    ax3.legend()
+
+    # Fourth subplot: Roll PID value
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.plot(sim.data["time"], sim.data["roll_pid"], color="b")
+    ax4.set_title("Roll PID Value")
+    ax4.set_xlabel("Time")
+    ax4.set_ylabel("Roll PID")
+
+    # Fifth subplot: Pitch PID value
+    ax5 = fig.add_subplot(gs[1, 2])
+    ax5.plot(sim.data["time"], sim.data["pitch_pid"], color="b")
+    ax5.set_title("Pitch PID Value")
+    ax5.set_xlabel("Time")
+    ax5.set_ylabel("Pitch PID")
+
+
+    plt.subplots_adjust(left=0, right=0.95, top=0.95, bottom=0.05, wspace=0.4, hspace=0.4)
+    # Show the combined figure
+    plt.show()
 
 sim = simulation(0.004, 4, "some_mode")
+visualisation(sim)
 
 
-# Prepare data
-trajectory = np.array(sim.data["pos"])
-x = trajectory[:, 0]
-y = trajectory[:, 1]
-z = trajectory[:, 2]
 
-# Create a new figure with 6 subplots (2x3 grid)
-fig = plt.figure(figsize=(15, 12))
-
-gs = GridSpec(2, 3, width_ratios=[1, 1, 1], height_ratios=[1, 1], hspace=0.3, wspace=0.2)
-
-# First subplot: 3D trajectory
-ax1 = fig.add_subplot(gs[0, 0], projection="3d")
-scatter_size = 2 
-ax1.scatter(x, y, z, label="Trajectory", s=scatter_size, c="b", marker="o")
-ax1.set_xlabel("X Label")
-ax1.set_ylabel("Y Label")
-ax1.set_zlabel("Z Label")
-ax1.set_xlim([-4, 4])
-ax1.set_ylim([-4, 4])
-ax1.set_zlim([0, 8])
-ax1.legend()
-
-# Second subplot: Roll vs command_roll
-ax2 = fig.add_subplot(gs[0, 1])
-ax2.plot(sim.data["time"], sim.data["roll"], label="actual roll", color="b")
-ax2.plot(sim.data["time"], sim.data["command_roll"], label="command", color="r", linestyle="--")
-ax2.set_title("Roll vs Command Roll")
-ax2.set_xlabel("Time")
-ax2.set_ylabel("Roll")
-ax2.legend()
-
-# Third subplot: Pitch vs command_pitch
-ax3 = fig.add_subplot(gs[0, 2])
-ax3.plot(sim.data["time"], sim.data["pitch"], label="actual pitch", color="b")
-ax3.plot(sim.data["time"], sim.data["command_pitch"], label="command", color="r", linestyle="--")
-ax3.set_title("Pitch vs Command Pitch")
-ax3.set_xlabel("Time")
-ax3.set_ylabel("Pitch")
-ax3.legend()
-
-# Fourth subplot: Roll PID value
-ax4 = fig.add_subplot(gs[1, 1])
-ax4.plot(sim.data["time"], sim.data["roll_pid"], color="b")
-ax4.set_title("Roll PID Value")
-ax4.set_xlabel("Time")
-ax4.set_ylabel("Roll PID")
-
-# Fifth subplot: Pitch PID value
-ax5 = fig.add_subplot(gs[1, 2])
-ax5.plot(sim.data["time"], sim.data["pitch_pid"], color="b")
-ax5.set_title("Pitch PID Value")
-ax5.set_xlabel("Time")
-ax5.set_ylabel("Pitch PID")
-
-
-plt.subplots_adjust(left=0, right=0.95, top=0.95, bottom=0.05, wspace=0.4, hspace=0.4)
-# Show the combined figure
-plt.show()
 

@@ -1,0 +1,81 @@
+#----------------------Class Drone_software------------------------
+# rate pid values
+self.PRateRoll = 5
+self.PRatePitch = 5
+self.PRateYaw = 0.0
+
+self.IRateRoll = 1
+self.IRatePitch = 1
+self.IRateYaw = 0.0
+
+self.DRateRoll = 0.11
+self.DRatePitch = 0.11
+self.DRateYaw = 0.0
+
+# angle pid values
+self.PRoll = 2.5
+self.PPitch = 2.5
+
+self.IRoll = 0.0
+self.IPitch = 0.0
+
+self.DRoll = 0.1
+self.DPitch = 0.1
+
+
+#----------------------Class Imu------------------------------
+self.roll_offset = 0
+self.pitch_offset = 0
+
+# def compute_imu_angles_and_noise
+imu_noise = False
+
+
+#----------------------Class simulation------------------------
+# time parameters
+self.dt = ###
+self.time = 0
+self.sim_time = ###
+
+# real parameters
+Ixx = 3.14e-3
+Iyy = 3.14e-3  # Ixx = Iyy
+Izz = 2.94e-3
+
+self.mass = 0.840
+
+self.center_of_mass_x = 0.0
+self.center_of_mass_y = 0.0
+self.center_of_mass_z = 0.0
+
+# motor position
+self.motor1_x = 0.10
+self.motor1_y = 0.10
+self.motor1_z = 1.0
+
+self.motor2_x = -0.10
+self.motor2_y = 0.10
+self.motor2_z = 1.0
+
+self.motor3_x = -0.10
+self.motor3_y = -0.10
+self.motor3_z = 1.0
+
+self.motor4_x = 0.10
+self.motor4_y = -0.10
+self.motor4_z = 1.0
+
+# sim mode
+self.mode = ###
+
+
+#----------------------Class motor------------------------
+motor_nominal_thrust = 0.8  # kg
+
+self.pwm = 1512
+
+# motors' thrust fraction
+thrust_fraction1 = ###
+thrust_fraction2 = ###
+thrust_fraction3 = ###
+thrust_fraction4 = ###
