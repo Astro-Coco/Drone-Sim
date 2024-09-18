@@ -5,8 +5,9 @@ from vpython import *
 from time import *
 import math
 import pandas as pd
+from matplotlib.gridspec import GridSpec
 
-def create_orientation_program(dt = 0.004, total_time = 2, duration_of_commands = 0.5, transition_time = 0.1, number_of_smoothing = 2,  *command_tuple):
+def create_orientation_program(dt = 0.004, total_time = 2, duration_of_commands = 0.5, transition_time = 0.1, number_of_smoothing = 1,  *command_tuple):
     total_number_of_data = int(total_time/dt)    
     number_of_commands = len(command_tuple)
     
@@ -128,7 +129,7 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.5, 0.05, 1, (10,10), (-10,-10), (-10,-10), (20, 0), (-20,0))
+        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.3, 0.1, 2, (0,0), (10,0), (-10,0), (0,0), (0,25), (25,0),(30,0))
 
         while self.time < self.sim_time:
             RateRoll = self.angular_speed[0]
@@ -158,6 +159,8 @@ class simulation:
             self.motor1.pwm, self.motor2.pwm, self.motor3.pwm, self.motor4.pwm = (
                 self.drone_software.compute_motor_inputs(self.throttle)
             )
+            self.roll_pid = self.drone_software.InputRoll
+            self.pitch_pid = self.drone_software.InputPitch
 
             self.compute_motor_forces()
             self.compute_force_and_torque()
@@ -189,13 +192,19 @@ class simulation:
         )
 
         self.frontArrow = arrow(
-            length=4, shaftwidth=0.1, color=color.purple, axis=vector(1, 0, 0)
+            length=4, shaftwidth=0.05, color=color.purple, axis=vector(1, 0, 0)
         )
         self.upArrow = arrow(
-            length=1, shaftwidth=0.1, color=color.magenta, axis=vector(0, 1, 0)
+            length=1, shaftwidth=0.05, color=color.magenta, axis=vector(0, 1, 0)
         )
         self.sideArrow = arrow(
-            length=2, shaftwidth=0.1, color=color.orange, axis=vector(0, 0, 1)
+            length=2, shaftwidth=0.05, color=color.orange, axis=vector(0, 0, 1)
+        )
+        self.speedArrow = arrow(
+            length=0, shaftwidth=0.08, color=color.black, axis=vector(0, 0, 1)
+        )
+        self.accelArrow = arrow(
+            length=0, shaftwidth=0.08, color=color.cyan, axis=vector(0, 0, 1)
         )
 
         bBoard = box(
@@ -242,6 +251,15 @@ class simulation:
         )
         self.force_array = self.normal * self.force
 
+        air_density = 1.225 #Kg/m^3
+        C_d = 1.1
+        Area_cross_section = 0.15*0.15
+
+        Drag_force = -0.5*air_density*C_d*Area_cross_section*self.drone_speed*np.linalg.norm(self.drone_speed)
+
+        self.force_array += Drag_force
+        
+
         self.torque = np.array([0.0, 0.0, 0.0])
         for motor in self.motors:
             self.torque = self.torque + np.cross(
@@ -286,6 +304,8 @@ class simulation:
                 "pitch": [],
                 "command_roll": [],
                 "command_pitch": [],
+                "roll_pid": [],
+                "pitch_pid": [],
             }
             self.first = False
         else:
@@ -304,6 +324,9 @@ class simulation:
 
             self.data["command_roll"].append(self.DesiredRoll)
             self.data["command_pitch"].append(self.DesiredPitch)
+
+            self.data["roll_pid"].append(self.roll_pid)
+            self.data["pitch_pid"].append(self.pitch_pid)
 
             # print(f' Time : {self.time} , Normal : {self.normal}')
 
@@ -346,6 +369,14 @@ class simulation:
             self.sideArrow.length = 2
             self.frontArrow.length = 4
             self.upArrow.length = 1
+
+            self.speedArrow.length = np.linalg.norm(self.drone_speed)
+            self.speedArrow.axis = vector(self.drone_speed[1], self.drone_speed[2], self.drone_speed[0])
+
+            self.accelArrow.length = np.linalg.norm(self.drone_acc)
+            self.accelArrow.axis = vector(self.drone_acc[1], self.drone_acc[2], self.drone_acc[0])
+
+
             # self.drone_position += vector(speed_times_dt[0], speed_times_dt[1], speed_times_dt[2])
             # myObj.pos = vector(self.drone)  # Move the object to the new position
         except:
@@ -355,12 +386,12 @@ class simulation:
 class Drone_software:
     def __init__(self):
         # rate pid values
-        self.PRateRoll, self.PRatePitch, self.PRateYaw = 3, 3, 0.0
+        self.PRateRoll, self.PRatePitch, self.PRateYaw = 5, 5, 0.0
         self.IRateRoll, self.IRatePitch, self.IRateYaw = 1, 1, 0.0
         self.DRateRoll, self.DRatePitch, self.DRateYaw = 0.11, 0.11, 0.0
 
         # angle pid values
-        self.PRoll, self.PPitch = 2, 2
+        self.PRoll, self.PPitch = 2.5, 2.5
         self.IRoll, self.IPitch = 0.0, 0.0
         self.DRoll, self.DPitch = 0.1, 0.1
 
@@ -577,21 +608,23 @@ def quaternion_to_euler(q):
     return roll, pitch, yaw
 
 
-sim = simulation(0.004, 5, "some_mode")
+sim = simulation(0.004, 4, "some_mode")
 
 
-
+# Prepare data
 trajectory = np.array(sim.data["pos"])
 x = trajectory[:, 0]
 y = trajectory[:, 1]
 z = trajectory[:, 2]
 
-# Create a new figure with 3 subplots (1 for 3D plot, 2 for 2D time series)
-fig = plt.figure(figsize=(10, 8))
+# Create a new figure with 6 subplots (2x3 grid)
+fig = plt.figure(figsize=(15, 12))
+
+gs = GridSpec(2, 3, width_ratios=[1, 1, 1], height_ratios=[1, 1], hspace=0.3, wspace=0.2)
 
 # First subplot: 3D trajectory
-ax1 = fig.add_subplot(221, projection="3d")
-scatter_size = 4  
+ax1 = fig.add_subplot(gs[0, 0], projection="3d")
+scatter_size = 2 
 ax1.scatter(x, y, z, label="Trajectory", s=scatter_size, c="b", marker="o")
 ax1.set_xlabel("X Label")
 ax1.set_ylabel("Y Label")
@@ -602,7 +635,7 @@ ax1.set_zlim([0, 8])
 ax1.legend()
 
 # Second subplot: Roll vs command_roll
-ax2 = fig.add_subplot(223)  # 2x2 grid, bottom left
+ax2 = fig.add_subplot(gs[0, 1])
 ax2.plot(sim.data["time"], sim.data["roll"], label="actual roll", color="b")
 ax2.plot(sim.data["time"], sim.data["command_roll"], label="command", color="r", linestyle="--")
 ax2.set_title("Roll vs Command Roll")
@@ -611,7 +644,7 @@ ax2.set_ylabel("Roll")
 ax2.legend()
 
 # Third subplot: Pitch vs command_pitch
-ax3 = fig.add_subplot(224)  # 2x2 grid, bottom right
+ax3 = fig.add_subplot(gs[0, 2])
 ax3.plot(sim.data["time"], sim.data["pitch"], label="actual pitch", color="b")
 ax3.plot(sim.data["time"], sim.data["command_pitch"], label="command", color="r", linestyle="--")
 ax3.set_title("Pitch vs Command Pitch")
@@ -619,8 +652,21 @@ ax3.set_xlabel("Time")
 ax3.set_ylabel("Pitch")
 ax3.legend()
 
-# Adjust layout so subplots don't overlap
-plt.tight_layout()
+# Fourth subplot: Roll PID value
+ax4 = fig.add_subplot(gs[1, 1])
+ax4.plot(sim.data["time"], sim.data["roll_pid"], color="b")
+ax4.set_title("Roll PID Value")
+ax4.set_xlabel("Time")
+ax4.set_ylabel("Roll PID")
 
+# Fifth subplot: Pitch PID value
+ax5 = fig.add_subplot(gs[1, 2])
+ax5.plot(sim.data["time"], sim.data["pitch_pid"], color="b")
+ax5.set_title("Pitch PID Value")
+ax5.set_xlabel("Time")
+ax5.set_ylabel("Pitch PID")
+
+
+plt.subplots_adjust(left=0, right=0.95, top=0.95, bottom=0.05, wspace=0.4, hspace=0.4)
 # Show the combined figure
 plt.show()
