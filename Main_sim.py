@@ -257,6 +257,8 @@ class simulation:
 
         self.angular_accel = self.inverse_inertial_matrix @ self.torque
         self.angular_speed = self.angular_speed + self.angular_accel * self.dt
+
+        
         if self.i == 0:
             self.q = np.array([1, 0, 0, 0])
 
