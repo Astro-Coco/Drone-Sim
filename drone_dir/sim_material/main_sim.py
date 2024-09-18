@@ -74,9 +74,10 @@ class Imu:
 
 
 class motor:
-    def __init__(self, x, y, thrust_fraction):
+    def __init__(self, x, y, thrust_fraction, sens_rotation):
         g = 9.81
         motor_nominal_thrust = 0.8  # kg
+        self.sens_rotation = sens_rotation
 
         self.pos_to_center = np.array([x, y, 0])
         self.thrust_fraction = thrust_fraction
@@ -114,10 +115,10 @@ class simulation:
 
         # fraction of power motor has
         # ADJUST POSITIONS
-        self.motor1 = motor(0.10, 0.10, 1.0)
-        self.motor2 = motor(-0.10, 0.10, 1.0)
-        self.motor3 = motor(-0.10, -0.10, 1.0)
-        self.motor4 = motor(0.10, -0.10, 1.0)
+        self.motor1 = motor(0.10, 0.10, 1.0, 1)
+        self.motor2 = motor(-0.10, 0.10, 1.0, -1)
+        self.motor3 = motor(-0.10, -0.10, 1.0, 1)
+        self.motor4 = motor(0.10, -0.10, 1.0, -1)
 
         self.motors = [self.motor1, self.motor2, self.motor3, self.motor4]
 
@@ -129,7 +130,7 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.3, 0.1, 2, (0,0), (10,0), (-10,0), (0,0), (0,25), (25,0),(30,0))
+        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.3, 0.1, 2, (0,0), (10,0), (-10,0))
 
         while self.time < self.sim_time:
             RateRoll = self.angular_speed[0]
@@ -272,6 +273,16 @@ class simulation:
         self.drone_acc = (self.force_array + gravity_force) / self.mass
         self.drone_speed = self.drone_speed + self.drone_acc * self.dt
         self.drone_pos = self.drone_pos + self.drone_speed * self.dt
+
+        for motor in self.motors:
+            battery_voltage = 14.8
+            reduction_in_motor_speed = 0.75
+            motor_kv = 2300
+            angular_speed = reduction_in_motor_speed*battery_voltage*motor_kv*(motor.pwm-1000)/1000
+            angular_speed = angular_speed*np.pi/30
+            torque_coefficient = 0.000002
+            torque_generated = motor.sens_rotation*torque_coefficient*angular_speed*angular_speed
+            self.torque = self.torque + np.array([0, 0, torque_generated])
 
         self.angular_accel = self.inverse_inertial_matrix @ self.torque
         self.angular_speed = self.angular_speed + self.angular_accel * self.dt
@@ -453,7 +464,7 @@ class Drone_software:
         )
 
         # ChangeRateYaw
-        DesiredRateYaw = 0
+        DesiredRateYaw = -np.pi/2
 
         ErrorRateRoll = DesiredRateRoll - RateRoll
         ErrorRatePitch = DesiredRatePitch - RatePitch
@@ -507,16 +518,16 @@ class Drone_software:
         # 1. Control mixer
         multiplication_factor = 1.024  # Check Carbon Aeronautics for more info
         MotorInput1 = multiplication_factor * (
-            throttle - self.InputRoll - self.InputPitch - self.InputYaw
+            throttle - self.InputRoll - self.InputPitch + self.InputYaw
         )
         MotorInput2 = multiplication_factor * (
-            throttle + self.InputRoll - self.InputPitch + self.InputYaw
+            throttle + self.InputRoll - self.InputPitch - self.InputYaw
         )
         MotorInput3 = multiplication_factor * (
-            throttle + self.InputRoll + self.InputPitch - self.InputYaw
+            throttle + self.InputRoll + self.InputPitch + self.InputYaw
         )
         MotorInput4 = multiplication_factor * (
-            throttle - self.InputRoll + self.InputPitch + self.InputYaw
+            throttle - self.InputRoll + self.InputPitch - self.InputYaw
         )
 
         # 2. Limit max and min thrust
