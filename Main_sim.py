@@ -130,8 +130,7 @@ class simulation:
         self.run_mainloop()
 
     def run_mainloop(self):
-        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 0.3, 0.1, 2, (0,0), (10,0), (-10,0), (0,0))
-        self.torques = []
+        temp, roll, pitch = create_orientation_program(self.dt, self.sim_time, 1, 0.1, 2, (0,0), (10,-10), (-10,10))
 
         while self.time < self.sim_time:
             RateRoll = self.angular_speed[0]
@@ -285,7 +284,6 @@ class simulation:
             angular_speed = angular_speed*np.pi/30
             torque_coefficient = 0.000002
             torque_generated = motor.sens_rotation*torque_coefficient*angular_speed*angular_speed
-            print(torque_generated)
             self.torque = self.torque + np.array([0, 0, torque_generated])
 
 
@@ -401,14 +399,14 @@ class simulation:
 class Drone_software:
     def __init__(self):
         # rate pid values
-        self.PRateRoll, self.PRatePitch, self.PRateYaw = 5, 5, 1
+        self.PRateRoll, self.PRatePitch, self.PRateYaw = 4, 4, 1
         self.IRateRoll, self.IRatePitch, self.IRateYaw = 1, 1, 0.0
         self.DRateRoll, self.DRatePitch, self.DRateYaw = 0.11, 0.11, 0.02
 
         # angle pid values
-        self.PRoll, self.PPitch = 2.5, 2.5
+        self.PRoll, self.PPitch = 3., 3
         self.IRoll, self.IPitch = 0.0, 0.0
-        self.DRoll, self.DPitch = 0.1, 0.1
+        self.DRoll, self.DPitch = 0.11, 0.11
 
     def pid_equation(self, Error, P, I, D, PrevError, PrevIterm):
         MaxPIDvalues = 300
@@ -470,7 +468,7 @@ class Drone_software:
         )
 
         # ChangeRateYaw
-        DesiredRateYaw = np.pi/2
+        DesiredRateYaw = 0
 
         ErrorRateRoll = DesiredRateRoll - RateRoll
         ErrorRatePitch = DesiredRatePitch - RatePitch
@@ -623,7 +621,7 @@ def quaternion_to_euler(q):
     return roll, pitch, yaw
 
 
-sim = simulation(0.004, 2, "some_mode")
+sim = simulation(0.004, 4, "some_mode")
 
 
 # Prepare data
